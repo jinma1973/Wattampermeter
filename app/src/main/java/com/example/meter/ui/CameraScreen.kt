@@ -3,6 +3,7 @@ package com.example.meter.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CaptureRequest
 import android.util.Range
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -160,9 +161,9 @@ private fun CameraContent() {
                 .build()
 
             // Жёсткая частота: без этого в темноте автоматика уйдёт на 15 fps.
-            val fpsRange = chooseFpsRange(provider, selector)
+            val fpsRange = chooseFpsRange(provider)
             Camera2Interop.Extender(analysis).setCaptureRequestOption(
-                CameraCharacteristics.CONTROL_AE_TARGET_FPS_RANGE,
+                CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
                 fpsRange,
             )
 
@@ -310,15 +311,21 @@ private fun focusAndLock(
 @OptIn(ExperimentalCamera2Interop::class)
 private fun chooseFpsRange(
     provider: ProcessCameraProvider,
-    selector: CameraSelector,
 ): Range<Int> {
     return try {
-        val cameraInfo = provider.getCameraInfo(selector)
-        val characteristics = Camera2CameraInfo.from(cameraInfo)
-        val available = characteristics
-            .getCameraCharacteristic(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
-            ?.toList()
-            .orEmpty()
+        val infos = provider.getAvailableCameraInfos()
+        // Выбираем тыловую камеру по LENS_FACING_BACK (надёжнее, чем getCameraInfo).
+        val backInfo = infos.firstOrNull { info ->
+            Camera2CameraInfo.from(info)
+                .getCameraCharacteristic(CameraCharacteristics.LENS_FACING) ==
+                CameraCharacteristics.LENS_FACING_BACK
+        } ?: infos.firstOrNull()
+
+        val available = backInfo?.let { info ->
+            Camera2CameraInfo.from(info)
+                .getCameraCharacteristic(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
+                ?.toList()
+        }.orEmpty()
 
         available.filter { it.upper == 30 }.maxByOrNull { it.upper - it.lower }
             ?: available.minByOrNull { kotlin.math.abs(it.upper - 30) }
