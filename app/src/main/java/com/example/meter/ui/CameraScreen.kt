@@ -154,18 +154,18 @@ private fun CameraContent() {
                 .build()
                 .also { it.setSurfaceProvider(previewView.surfaceProvider) }
 
-            val analysis = ImageAnalysis.Builder()
+            // Жёсткая частота: без этого в темноте автоматика уйдёт на 15 fps.
+            val fpsRange = chooseFpsRange(provider)
+            val analysisBuilder = ImageAnalysis.Builder()
                 .setResolutionSelector(resolutionSelector)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-                .build()
-
-            // Жёсткая частота: без этого в темноте автоматика уйдёт на 15 fps.
-            val fpsRange = chooseFpsRange(provider)
-            Camera2Interop.Extender(analysis).setCaptureRequestOption(
+            // Extender вешаем на БИЛДЕР ImageAnalysis, а не на собранный use case.
+            Camera2Interop.Extender(analysisBuilder).setCaptureRequestOption(
                 CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
                 fpsRange,
             )
+            val analysis = analysisBuilder.build()
 
             analysis.setAnalyzer(analysisExecutor) { image ->
                 val rot = image.imageInfo.rotationDegrees
